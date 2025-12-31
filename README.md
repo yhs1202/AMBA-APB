@@ -20,24 +20,25 @@
 # **Design Philosophy**
 
 - APB는 의도적으로 단순함.
-    1. No-pipelined: 주소/제어를 먼저 내고, 그 다음 clk 에 enable 로 액세스 확정
-    2. No-burst Mode: 매 전송이 독립적임
-    3. No-outstanding: 동시에 여러 트랜잭션을 걸어두지 않음
-    4. arbitration/ID 개념이 사실상 없음 (단일 Master 구조)
-- 그 대신 얻는 이점
-    1. Interface, Slave Logic이 매우 작음
-    2. Power / Area 절감
-    3. Verification이 쉬움
+1. No-pipelined: 주소/제어를 먼저 내고, 그 다음 clk 에 enable 로 액세스 확정
+2. No-burst Mode: 매 전송이 독립적임
+3. No-outstanding: 동시에 여러 트랜잭션을 걸어두지 않음
+4. arbitration/ID 개념이 사실상 없음 (단일 Master 구조)
+
+- 그 대신 얻는 이점.
+1. Interface, Slave Logic이 매우 작음
+2. Power / Area 절감
+3. Verification이 쉬움
 
 # Topology
 
-- **High-performance bus(AXI/AHB)**: CPU/DMA/메모리 컨트롤러가 붙는 고성능 영역
-- **Bridge(AXI2APB/AHB2APB)**: 고성능 트랜잭션을 APB 형식으로 변환
-- **APB Bus**: 여러 peripheral slave가 매달림
-- **Address decoder**: PADDR 상위 비트로 어떤 슬레이브를 선택할지 결정
-- **Peripheral slave**: 내부 레지스터 파일 + APB 슬레이브 인터페이스
+- High-performance bus(AXI/AHB): CPU/DMA/메모리 컨트롤러가 붙는 고성능 영역
+- Bridge(AXI2APB/AHB2APB): 고성능 트랜잭션을 APB 형식으로 변환
+- APB Bus**: 여러 peripheral slave가 매달림
+- Address decoder: PADDR 상위 비트로 어떤 Slave를 선택할지 결정
+- Peripheral slave: 내부 레지스터 파일 + APB Slave 인터페이스
 
-APB는 보통 단일 Master(브리지) + 다수 Slave 형태. (1:N)
+APB는 보통 단일 Master(Bridge) + 다수 Slave 형태. (1:N)
 
 # Main Signal Descriptions
 
@@ -79,14 +80,12 @@ APB는 보통 단일 Master(브리지) + 다수 Slave 형태. (1:N)
 # Transfers
 
 > 제일 중요한거: transfer 항상 2-stage로 진행됨.
-> 
 <details>
   <summary><strong>Timing Diagram Conventions</strong></summary>
     
-    ![image.png](./imgs/image%201.png)
+![image.png](./imgs/image%201.png)
     
 </details>
-
 
 ## WRITE
 
@@ -153,22 +152,22 @@ Step 2. ACCESS phase
 
 ## APB에서 “outstanding이 없다”를 신호 관점으로 증명
 
-- APB는 전송이 **Setup(PSEL=1, PENABLE=0)** → **Access(PENABLE=1)**로 고정됨.
-- Access 동안 PREADY=0이면 wait state로 **같은 트랜잭션이 계속 유지**되어야 하고,
+- APB는 전송이 Setup(PSEL=1, PENABLE=0) → Access(PENABLE=1)로 고정됨.
+- Access 동안 PREADY=0이면 wait state로 같은 트랜잭션이 계속 유지되어야 하고,
     
-    이때 PADDR/PWRITE/PWDATA/PSEL/PENABLE은 **변하면 안 됨**(stable). → 전제조건.
+    이때 PADDR/PWRITE/PWDATA/PSEL/PENABLE은 변하면 안 됨(stable). → 전제조건.
     
 - 따라서 미완료 상태에서 다음 주소/제어를 새로 내밀 “채널”이 없음.
-- “주소 채널과 데이터/응답 채널이 분리”된 AXI와 달리, APB는 **한 세트 신호가 한 트랜잭션에 종속**됨 → outstanding 불가.
+- “주소 채널과 데이터/응답 채널이 분리”된 AXI와 달리, APB는 한 세트 신호가 한 트랜잭션에 종속됨 → outstanding 불가.
 
-## 슬레이브가 느려서 PREADY=0을 길게 끄는 동안, 마스터(브리지)가 다음 트랜잭션을 “미리” 준비해두면 안 되는지?
+## Slave가 느려서 PREADY=0을 길게 끄는 동안, Master가 다음 트랜잭션을 미리 준비해두면 안 되는지?
 
 - 프로토콜 위반임
 - PREADY=0인 동안은 Access phase 유지이며, 관련 신호는 모두 stable 되어야함.
 - “미리 준비”를 하려면 별도의 주소 큐/채널(파이프라인)이 있어야 하는데 APB에는 없음.
 - 따라서 상위 버스에서 들어온 요청은 브리지 내부 큐에 적재할 수는 있어도(APB 바깥에서),
     
-    **APB 버스 신호로는 다음 요청을 표현할 방법이 없음**.
+    APB 버스 신호로는 다음 요청을 표현할 방법이 없음.
     
 
 ## APB4의 PSTRB가 실제로 어떤 버그를 줄이는지?
@@ -182,8 +181,8 @@ Step 2. ACCESS phase
     
     그래서 흔히 두 가지 중 하나가 발생함.
     
-    1. slave가 32-bit 전체를 덮어씀 → 의도치 않은 상위 바이트가 0으로 깨지거나 이전 값이 날아감
-    2. slave가 소프트웨어가 RMW(read-modify-write)로 해결하라고 가정 → 동시성(인터럽트/다른 마스터/하드웨어 업데이트)에서 RMW 레이스로 비트가 유실
+1. slave가 32-bit 전체를 덮어씀 → 의도치 않은 상위 바이트가 0으로 깨지거나 이전 값이 날아감
+2. slave가 소프트웨어가 RMW(read-modify-write)로 해결하라고 가정 → 동시성(인터럽트/다른 Master/하드웨어 업데이트)에서 RMW 레이스로 비트가 유실
 - PSTRB는 바이트 단위 유효 표시로 “이번 write에서 갱신해야 할 바이트만 갱신”이 가능해짐.
     
     즉,
@@ -191,9 +190,9 @@ Step 2. ACCESS phase
     - PSTRB[i]=1인 바이트만 업데이트
     - 나머지 바이트는 유지
         
-        이런 식으로 슬레이브가 내부에서 안전하게 mask-write를 수행할 수 있습니다.
+        이런 식으로 Slave가 내부에서 안전하게 mask-write를 수행할 수 있음.
         
 
 # References
 
-AMBA APB Protocol Specification (ARM)
+AMBA APB Protocol Specification (ARM): https://developer.arm.com/documentation/ihi0024/latest/
