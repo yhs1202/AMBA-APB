@@ -12,6 +12,8 @@
 - 한 번에 하나의 Transaction만 처리 가능. (non-Pipelined)
 - AXI/AHB <> APB bridge 방식으로 고성능 버스 트랜잭션을 Register R/W로 단순 변환해 연결. (Requester <> Completer, Same with Master <> Slave)
 
+    ![image.png](./imgs/image%207.png)
+
 # Needs
 
 - Peripheral Register 접근은 전송량이 작고, Delay에 매우 민감하지 않으며, IP가 많아 Interface의 단순성이 중요함.
@@ -48,15 +50,15 @@ APB는 보통 단일 Master(Bridge) + 다수 Slave 형태. (1:N)
 
 **Master → Slave**
 
-- `PADDR`: Address → Decoder로 들어가서 어떤 slv 에 접근할 건지 결정.
-- `PSELx`: Select → Decoder에서 결정된 slv sel
-- `PENABLE`: Enable → Access phase 표시
+- `PADDR`: Address, Decoder로 들어가서 어떤 slv 에 접근할 건지 결정.
+- `PSELx`: Select, Decoder에서 결정된 slv sel
+- `PENABLE`: Enable, Master가 준비를 마치고 전송 가능하다는 신호.
 - `PWRITE`: R/W mode (R:0, W:1)
 - `PWDATA`: Write data, can be 8, 16, 32 bits
 
 **Slave → Master**
 
-- `PREADY`: Ready (Master의 명령을 끝냈다는 flag)
+- `PREADY`: Ready, Master의 명령을 처리할 준비가 되었다는 flag
 - `PRDATA`: Read data
 
 (APB3)
@@ -65,7 +67,7 @@ APB는 보통 단일 Master(Bridge) + 다수 Slave 형태. (1:N)
 
 (APB4)
 
-- `PSTRB`: Byte Strobe → 쓰기 시 유효 바이트 lane 표시
+- `PSTRB`: Byte Strobe, 쓰기 시 유효 바이트 lane 표시
 - `PPROT`: protection (권한/보안/instruction/데이터 성격 표현)
 
 (APB5) 저전력 관련 신호들 추가
@@ -76,6 +78,16 @@ APB는 보통 단일 Master(Bridge) + 다수 Slave 형태. (1:N)
 # Operating States
 
 ![image.png](./imgs/image.png)
+
+1. IDLE
+    - Transfer를 시작하면 SETUP으로 transition
+2. SETUP
+    - PSEL을 통해 필요한 Slave 선택
+    - 다음 clk에 ACCESS로 transition
+3. ACCESS
+    - Master가 전송 준비를 끝내고 PENABLE 신호를 올림 (다른 신호는 유지되어야함.)
+    - 단 PREADY가 1이 되어야 transfer가 발생되고 그 전까지는 wait.
+    - 다음 transfer가 있다면 SETUP으로, 없다면 IDLE로 transition
 
 # Transfers
 
@@ -118,7 +130,7 @@ Step 1. SETUP phase
 
 Step 2. ACCESS phase
 
-- 다음 clk 에 PENABLE = 1 올리면서 ACCESS 진입.
+- 다음 clk 에 PENABLE = 1 올리면서 ACCESS 진입. (Master는 Read 할 준비가 되었음)
 - SLV 송신 완료되면 PREADY = 1로 응답.
 - Wait 가 필요하면 PREADY = 0으로 access를 유지.
 - **PREADY = 1인 사이클의 시작에서 샘플링 시작.**
